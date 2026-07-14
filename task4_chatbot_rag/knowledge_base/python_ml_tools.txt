@@ -1,0 +1,39 @@
+Python ML/AI Ecosystem
+
+Core Libraries:
+- NumPy: Numerical computing with array operations
+- Pandas: Data manipulation and analysis
+- Matplotlib/Seaborn: Data visualization
+- Scikit-learn: Classical ML algorithms and tools
+
+Deep Learning Frameworks:
+- PyTorch: Dynamic computation graph, preferred for research
+- TensorFlow: Static graph, strong production deployment
+- Keras: High-level API for rapid prototyping
+
+NLP Libraries:
+- Hugging Face Transformers: Pre-trained models for NLP tasks
+- spaCy: Industrial-strength NLP library
+- NLTK: Classic NLP toolkit for education
+
+Data Processing:
+- Datasets (Hugging Face): Easy dataset loading and processing
+- Dask: Parallel computing for large datasets
+- Apache Spark: Distributed data processing
+
+MLOps and Deployment:
+- MLflow: Experiment tracking and model management
+- Docker: Containerization for reproducible environments
+- FastAPI: High-performance API for model serving
+- Streamlit/Gradio: Rapid web app development for ML
+
+Vector Databases:
+- FAISS: Facebook's library for efficient similarity search
+- ChromaDB: Lightweight embedding database
+- Pinecone: Managed vector database service
+- Weaviate: Open-source vector search engine
+
+LLM Frameworks:
+- LangChain: Framework for building LLM applications
+- LlamaIndex: Data framework for LLM applications
+- Semantic Kernel: Microsoft's LLM orchestration SDK

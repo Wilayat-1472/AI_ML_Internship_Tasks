@@ -1,0 +1,30 @@
+Machine Learning Techniques and Algorithms
+
+Supervised Learning:
+- Linear Regression: Predicts continuous values by fitting a linear relationship
+- Logistic Regression: Binary classification using sigmoid function
+- Decision Trees: Tree-like model of decisions based on features
+- Random Forest: Ensemble of decision trees for improved accuracy
+- Support Vector Machines (SVM): Finds optimal hyperplane for classification
+- Neural Networks: Interconnected nodes that learn complex patterns
+
+Unsupervised Learning:
+- K-Means Clustering: Groups data into k clusters based on similarity
+- DBSCAN: Density-based clustering for arbitrary-shaped clusters
+- Principal Component Analysis (PCA): Dimensionality reduction technique
+- Autoencoders: Neural networks for learning compressed representations
+
+Deep Learning Architectures:
+- Convolutional Neural Networks (CNNs): Specialized for image processing
+- Recurrent Neural Networks (RNNs): Designed for sequential data
+- Long Short-Term Memory (LSTM): RNN variant for long-range dependencies
+- Generative Adversarial Networks (GANs): Two networks competing to generate realistic data
+- Transformers: Self-attention mechanism for parallel processing of sequences
+
+Evaluation Metrics:
+- Accuracy: Ratio of correct predictions to total predictions
+- Precision: True positives / (True positives + False positives)
+- Recall: True positives / (True positives + False negatives)
+- F1 Score: Harmonic mean of precision and recall
+- RMSE: Root Mean Square Error for regression tasks
+- AUC-ROC: Area under the Receiver Operating Characteristic curve

@@ -1,0 +1,21 @@
+Artificial Intelligence (AI) Overview
+
+Artificial Intelligence is a branch of computer science that aims to create intelligent machines that can simulate human intelligence. AI encompasses several subfields:
+
+1. Machine Learning (ML): Algorithms that learn from data without being explicitly programmed. Types include supervised learning, unsupervised learning, and reinforcement learning.
+
+2. Deep Learning: A subset of ML using neural networks with multiple layers. Common architectures include CNNs for images, RNNs for sequences, and Transformers for NLP.
+
+3. Natural Language Processing (NLP): Enables computers to understand, interpret, and generate human language. Key applications include translation, sentiment analysis, and chatbots.
+
+4. Computer Vision: Allows machines to interpret and understand visual information from the world. Used in autonomous vehicles, medical imaging, and facial recognition.
+
+5. Robotics: Combines AI with physical machines to perform tasks in the real world.
+
+Key milestones in AI history:
+- 1950: Alan Turing proposes the Turing Test
+- 1956: The term "Artificial Intelligence" is coined at Dartmouth Conference
+- 1997: IBM Deep Blue defeats world chess champion Garry Kasparov
+- 2012: AlexNet wins ImageNet competition, sparking deep learning revolution
+- 2017: Transformer architecture introduced in "Attention Is All You Need"
+- 2022: ChatGPT launch marks mainstream AI adoption

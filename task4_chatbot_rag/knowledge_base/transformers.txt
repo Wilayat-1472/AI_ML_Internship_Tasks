@@ -1,0 +1,29 @@
+Transformer Models and Architecture
+
+The Transformer, introduced in 2017, revolutionized NLP by replacing recurrence with self-attention mechanisms.
+
+Core Components:
+1. Self-Attention: Allows the model to weigh the importance of different parts of the input
+2. Multi-Head Attention: Multiple attention mechanisms running in parallel
+3. Positional Encoding: Adds sequence order information since transformers lack inherent order
+4. Feed-Forward Networks: Dense layers applied after attention
+5. Layer Normalization: Stabilizes training
+
+Key Transformer Models:
+- BERT (2018): Bidirectional encoder, excellent for understanding tasks
+- GPT (2018-): Autoregressive decoder, strong at generation
+- T5 (2019): Text-to-text framework for all NLP tasks
+- BART (2019): Denoising autoencoder for generation tasks
+- Vision Transformer (ViT): Applies transformers to image classification
+
+Modern LLMs:
+- GPT-3/4: Large autoregressive models with billions of parameters
+- LLaMA: Open-source large language models from Meta
+- Claude: Anthropic's constitutional AI assistant
+- Gemini: Google's multimodal AI model
+
+Fine-tuning Approaches:
+- Full fine-tuning: Update all parameters on task-specific data
+- LoRA: Low-Rank Adaptation for efficient fine-tuning
+- Prompt Tuning: Learning continuous prompts without changing model weights
+- RLHF: Reinforcement Learning from Human Alignment

@@ -1,0 +1,38 @@
+NLP Applications and Techniques
+
+Text Classification:
+- Sentiment Analysis: Determining emotional tone of text
+- Topic Classification: Categorizing documents by subject
+- Spam Detection: Identifying unwanted messages
+- Intent Recognition: Understanding user goals in dialogue
+
+Named Entity Recognition (NER):
+- Identifies entities like persons, organizations, locations, dates
+- Used in information extraction and knowledge graph construction
+
+Machine Translation:
+- Seq2Seq models with attention mechanism
+- BLEU score evaluates translation quality
+- Neural MT has largely replaced statistical approaches
+
+Text Generation:
+- Language modeling: Predicting next word in sequence
+- Controllable generation: Steering output with specific attributes
+- Summarization: Creating concise versions of long documents
+
+Question Answering:
+- Extractive QA: Finding answer spans in context
+- Generative QA: Formulating answers from knowledge
+- Open-domain QA: Answering questions from large knowledge bases
+
+Conversational AI:
+- Task-oriented dialogue: Completing specific user tasks
+- Chit-chat systems: Engaging in open-ended conversation
+- Retrieval-Augmented Generation (RAG): Combining retrieval with generation
+- Context memory: Maintaining conversation history for coherent dialogue
+
+Embeddings and Vector Search:
+- Word embeddings: Dense vector representations of words
+- Sentence embeddings: Fixed-size vectors for entire sentences
+- Semantic search: Finding similar content based on meaning
+- Vector databases: FAISS, Pinecone, Weaviate for efficient similarity search
