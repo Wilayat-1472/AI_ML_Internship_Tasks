@@ -227,6 +227,7 @@ Knowledge Base (5 docs) → Chunking (RecursiveCharacterTextSplitter) → Embedd
 - Python 3.10+
 - Conda (recommended) or pip
 - 8GB+ RAM recommended for BERT training
+- **Hugging Face Account** — AG News dataset requires HF token for download
 
 ### Installation
 
@@ -241,10 +242,29 @@ conda activate AI_ML2
 
 # 3. Install dependencies
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-pip install transformers datasets scikit-learn pandas matplotlib seaborn
+pip install transformers datasets scikit-learn pandas matplotlib seaborn python-dotenv
 pip install gradio streamlit langchain langchain-community langchain-huggingface
 pip install sentence-transformers faiss-cpu accelerate
 ```
+
+### HF Token Setup
+
+Task 1 downloads the **AG News dataset** from Hugging Face Hub, which requires authentication.
+
+1. Create a free account at [huggingface.co](https://huggingface.co)
+2. Go to [Settings → Access Tokens](https://huggingface.co/settings/tokens) and create a token
+3. Copy `.env.example` and add your token:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env`:
+```env
+HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+> **Security:** `.env` is in `.gitignore` and will never be committed. Your token stays local.
 
 ### Run Tasks
 

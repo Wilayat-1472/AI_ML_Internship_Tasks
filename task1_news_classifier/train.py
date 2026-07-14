@@ -1,12 +1,16 @@
 """
 Task 1: News Topic Classifier Using BERT
-Fine-tune BERT on AG News Dataset. Optimized for CPU.
+Fine-tune BERT on AG News Dataset (Hugging Face). Optimized for CPU.
 """
 
 import torch, numpy as np, json, os
+from dotenv import load_dotenv
 from datasets import load_dataset
 from transformers import BertTokenizer, BertForSequenceClassification, Trainer, TrainingArguments
 from sklearn.metrics import accuracy_score, f1_score, classification_report
+
+load_dotenv()
+HF_TOKEN = os.getenv("HF_TOKEN")
 
 LABEL_MAP = {0: "World", 1: "Sports", 2: "Business", 3: "Sci/Tech"}
 OUTPUT_DIR = "./news_topic_model"
@@ -15,7 +19,7 @@ print("=" * 60)
 print("Task 1: News Topic Classifier Using BERT")
 print("=" * 60)
 
-dataset = load_dataset("fancyzhx/ag_news")
+dataset = load_dataset("fancyzhx/ag_news", token=HF_TOKEN)
 train_ds = dataset["train"].shuffle(seed=42).select(range(3000))
 test_ds = dataset["test"].shuffle(seed=42).select(range(1000))
 print(f"Train: {len(train_ds)}, Test: {len(test_ds)}")
