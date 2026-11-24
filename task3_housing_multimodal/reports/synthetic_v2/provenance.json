@@ -1,0 +1,15 @@
+{
+  "scope": "synthetic data only; one seed; frozen pretrained encoder",
+  "command": "OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 python train.py --device cpu --output-dir runs/verified_synthetic_v2",
+  "checkpoint_sha256": "20eebc6826960d140622282f8191022d56e3d035bcdf95b8dc6bc8a0ec8d3594",
+  "checkpoint_location": "runs/verified_synthetic_v2/model.pt (local; not committed)",
+  "source_sha256": "8a81cae0615804208b8871645147e233d70d65dd1d0e000aaf9c7de96b1e656a",
+  "packages": {
+    "torch": "2.12.0+cpu",
+    "torchvision": "0.27.0+cpu",
+    "numpy": "2.3.5",
+    "pandas": "2.3.3",
+    "scikit-learn": "1.7.2",
+    "Pillow": "12.0.0"
+  }
+}

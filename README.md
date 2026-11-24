@@ -34,7 +34,7 @@ This repository contains **3 advanced AI/ML projects** completed as part of the 
 | Task | Domain | Approach | Key Metric |
 | :--- | :--- | :--- | :--- |
 | **Task 1** — News Topic Classifier | NLP / Classification | BERT Fine-Tuning (Hugging Face) | Accuracy **90.4%**, F1 **90.37%** |
-| **Task 3** — Multimodal Housing Price Prediction | Computer Vision + Tabular | ResNet-18 CNN + MLP Feature Fusion | MAE **$343K**, RMSE **$385K** |
+| **Task 3** — Multimodal Housing Price Prediction | Computer Vision + Tabular | ResNet-18 CNN + MLP Feature Fusion | Corrected synthetic test R² **0.9362**; tabular baseline **0.9906** |
 | **Task 4** — Context-Aware RAG Chatbot | Conversational AI | LangChain + FAISS + Sentence Embeddings | Retrieval + Response in <1s |
 
 ---
@@ -88,21 +88,21 @@ weighted avg       0.91      0.90      0.90      1000
 
 ### Task 3: Multimodal Housing Price Prediction
 
-A multimodal deep learning model that predicts housing prices by fusing visual features from house images (CNN) with structured tabular data (MLP).
+A multimodal learning prototype combining generated house illustrations with synthetic tabular records. It is not a real-world property valuation system.
 
 **Pipeline:**
 ```
-Synthetic Dataset Generation (2000 samples) → Image Preprocessing (ResNet-18) + Tabular Preprocessing (StandardScaler) → Feature Fusion → Joint Training → MAE / RMSE Evaluation
+Synthetic records → 70/15/15 train/validation/test → training-only scaling → CNN/MLP fusion → validation checkpoint selection → locked test evaluation + tabular baselines
 ```
 
 | Capability | Details |
 | :--- | :--- |
 | **Dataset** | Synthetic — 2,000 samples with house images (128×128) + 6 tabular features |
-| **Image Encoder** | ResNet-18 (pretrained on ImageNet, fine-tuned) → 512-d feature vector |
-| **Tabular Encoder** | MLP — Linear(6→64) → ReLU → BN → Dropout → Linear(64→32) → ReLU → 32-d |
+| **Image Encoder** | Frozen ImageNet-pretrained ResNet-18 → 512-d feature vector; random initialization available for offline software checks |
+| **Tabular Encoder** | MLP — Linear(6→64) → ReLU → LayerNorm → Dropout → Linear(64→32) → ReLU → 32-d |
 | **Fusion** | Concatenation (512 + 32 = 544) → FC layers → 1-d output (price) |
-| **Training** | MSE Loss · Adam optimizer · lr 1e-4 · 15 epochs · ReduceLROnPlateau |
-| **Evaluation** | MAE, RMSE, R², Training Curves, Actual vs Predicted Plot |
+| **Training** | MSE on train-normalized log prices · Adam · lr 1e-4 · 15 epochs · validation-only ReduceLROnPlateau and best checkpoint |
+| **Evaluation** | One test evaluation after selection: MAE/RMSE/R², training-mean and tabular Ridge baselines; exported split IDs and normalization |
 
 #### Model Architecture
 ```
@@ -128,16 +128,17 @@ Synthetic Dataset Generation (2000 samples) → Image Preprocessing (ResNet-18) 
               └─────────────┘
 ```
 
-| Metric | Value |
+| Historical metric (old pipeline) | Value |
 | :--- | :---: |
 | Mean Absolute Error (MAE) | **$343,358** |
 | Root Mean Squared Error (RMSE) | **$384,713** |
+| R-squared | **-2.0692** |
 | Final Train Loss | **5.1** (from 167.5) |
 | Total Parameters | **11.2M** (9M trainable) |
 
-> **Key Insight:** The model learns meaningful representations — image features contribute to price prediction alongside tabular data, demonstrating effective multimodal fusion.
+> **Evidence limit:** Negative R-squared shows poor historical predictive performance. Those results used pre-split scaling and test-driven scheduling. A separate corrected 2,000-sample run achieved test R² **0.9362** (MAE **43,853.61**) under training-only scaling and validation-only selection. Tabular Ridge was stronger at **0.9906**, so no gain from images is established. The generator/splits changed; these are not controlled before/after results. [Metrics and provenance](task3_housing_multimodal/reports/synthetic_v2/metrics.json).
 
-> **Script:** [`task3_housing_multimodal/train.py`](task3_housing_multimodal/train.py) | **Results:** [`multimodal_model/results.png`](task3_housing_multimodal/multimodal_model/results.png)
+> **Script:** [`task3_housing_multimodal/train.py`](task3_housing_multimodal/train.py) | **Protocol and tests:** [Task README](task3_housing_multimodal/README.md)
 
 ---
 
@@ -338,7 +339,7 @@ AI_ML_Internship_Tasks/
 | :--- | :--- | :--- | :---: |
 | Task 1 | BERT (fine-tuned) | Accuracy | **90.4%** |
 | Task 1 | BERT (fine-tuned) | F1-Score | **90.37%** |
-| Task 3 | ResNet-18 + MLP | MAE | **$343K** |
+| Task 3 | ResNet-18 + MLP | Corrected synthetic test MAE / R² | **43,853.61 / 0.9362**; tabular Ridge R² **0.9906** |
 | Task 3 | ResNet-18 + MLP | RMSE | **$385K** |
 | Task 4 | FAISS + MiniLM-L6 | Query Time | **< 1s** |
 | Task 4 | FAISS + MiniLM-L6 | Retrieval Accuracy | **100%** (correct sources) |

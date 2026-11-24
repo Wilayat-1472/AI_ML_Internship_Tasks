@@ -1,306 +1,231 @@
-"""
-Task 3: Multimodal ML – Housing Price Prediction Using Images + Tabular Data
-Predict housing prices using both structured data and house images.
-"""
+"""Synthetic multimodal regression with train-only preprocessing and a locked test set.
 
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-import torchvision.transforms as transforms
-import torchvision.models as models
+Importing this module performs no downloads, training or file writes.
+"""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import random
+
 import numpy as np
 import pandas as pd
-import os
-import json
+from PIL import Image
+from sklearn.dummy import DummyRegressor
+from sklearn.linear_model import Ridge
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-from PIL import Image
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+import torch
+from torch import nn
+from torch.utils.data import Dataset, DataLoader
+from torchvision import models, transforms
 
-np.random.seed(42)
-torch.manual_seed(42)
+FEATURES = ('area', 'bedrooms', 'bathrooms', 'age', 'garage', 'location_score')
 
-DATA_DIR = "./housing_data"
-MODEL_DIR = "./multimodal_model"
-IMG_SIZE = 128
-BATCH_SIZE = 16
-EPOCHS = 15
-LR = 1e-4
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-print("=" * 60)
-print("Task 3: Multimodal Housing Price Prediction")
-print("=" * 60)
+def generate_data(samples=2000, seed=42):
+    """Generate toy records, not real property observations."""
+    if samples < 20:
+        raise ValueError('Use at least 20 synthetic records for three nonempty splits.')
+    rng = np.random.default_rng(seed)
+    frame = pd.DataFrame({
+        'area': rng.uniform(500, 5000, samples),
+        'bedrooms': rng.integers(1, 6, samples),
+        'bathrooms': rng.integers(1, 4, samples),
+        'age': rng.uniform(0, 50, samples),
+        'garage': rng.integers(0, 3, samples),
+        'location_score': rng.uniform(1, 10, samples),
+    })
+    frame['price'] = (frame.area * 150 + frame.bedrooms * 25000
+                      + frame.bathrooms * 15000 - frame.age * 1000
+                      + frame.garage * 20000 + frame.location_score * 30000
+                      + rng.normal(0, 20000, samples))
+    return frame
 
-os.makedirs(DATA_DIR, exist_ok=True)
-os.makedirs(MODEL_DIR, exist_ok=True)
 
-print("\n[1/6] Generating synthetic housing dataset...")
-n_samples = 2000
+def split_indices(count, seed=42):
+    train, held_out = train_test_split(np.arange(count), test_size=0.3, random_state=seed)
+    val, test = train_test_split(held_out, test_size=0.5, random_state=seed)
+    return {'train': train, 'validation': val, 'test': test}
 
-areas = np.random.uniform(500, 5000, n_samples)
-bedrooms = np.random.randint(1, 6, n_samples)
-bathrooms = np.random.randint(1, 4, n_samples)
-age = np.random.uniform(0, 50, n_samples)
-garage = np.random.randint(0, 3, n_samples)
-location_score = np.random.uniform(1, 10, n_samples)
 
-prices = (
-    areas * 150
-    + bedrooms * 25000
-    + bathrooms * 15000
-    - age * 1000
-    + garage * 20000
-    + location_score * 30000
-    + np.random.normal(0, 20000, n_samples)
-)
+def fit_preprocessors(frame, training_indices):
+    training = frame.iloc[training_indices]
+    features = StandardScaler().fit(training.loc[:, FEATURES])
+    targets = StandardScaler().fit(np.log1p(training.price.to_numpy())[:, None])
+    return features, targets
 
-df = pd.DataFrame({
-    "area": areas, "bedrooms": bedrooms, "bathrooms": bathrooms,
-    "age": age, "garage": garage, "location_score": location_score,
-    "price": prices,
-})
 
-print(f"  Generated {n_samples} samples")
-print(f"  Price range: ${prices.min():,.0f} - ${prices.max():,.0f}")
-print(f"  Mean price: ${prices.mean():,.0f}")
-
-print("\n[2/6] Generating synthetic house images...")
-img_dir = os.path.join(DATA_DIR, "images")
-os.makedirs(img_dir, exist_ok=True)
-
-def generate_house_image(idx, area, bedrooms, price):
-    img = np.random.randint(180, 255, (IMG_SIZE, IMG_SIZE, 3), dtype=np.uint8)
-    n_stories = 1 if float(area) < 2000 else 2
-    wall_color = np.array([np.random.randint(150, 230), np.random.randint(120, 200), np.random.randint(80, 160)])
-    for y in range(40, 90):
-        for x in range(20, 110):
-            img[y, x] = wall_color
-    roof_color = np.array([np.random.randint(80, 140), np.random.randint(40, 80), np.random.randint(30, 60)])
-    for y in range(20, 45):
-        for x in range(15, 115):
-            if abs(y - 42) > abs(x - 65) * 0.3:
-                img[y, x] = roof_color
-    door_color = np.array([101, 67, 33])
-    for y in range(60, 88):
-        for x in range(55, 70):
-            img[y, x] = door_color
-    for i in range(min(int(bedrooms), 3)):
-        wx = 25 + i * 30
-        for y in range(50, 65):
-            for x in range(wx, wx + 15):
-                img[y, x] = np.array([135, 206, 235])
-    img_pil = Image.fromarray(img)
-    img_pil.save(os.path.join(img_dir, f"house_{idx}.png"))
-
-for i in range(n_samples):
-    generate_house_image(i, df.iloc[i]["area"], df.iloc[i]["bedrooms"], df.iloc[i]["price"])
-
-print(f"  Generated {n_samples} house images ({IMG_SIZE}x{IMG_SIZE})")
-
-print("\n[3/6] Preparing dataset and dataloaders...")
-feature_cols = ["area", "bedrooms", "bathrooms", "age", "garage", "location_score"]
-X_tab = df[feature_cols].values
-y = df["price"].values
-
-scaler = StandardScaler()
-X_tab = scaler.fit_transform(X_tab)
-y_log = np.log1p(y)
-
-X_tab_train, X_tab_test, y_train, y_test, idx_train, idx_test = train_test_split(
-    X_tab, y_log, np.arange(n_samples), test_size=0.2, random_state=42
-)
-
-train_transform = transforms.Compose([
-    transforms.Resize((IMG_SIZE, IMG_SIZE)),
-    transforms.RandomHorizontalFlip(p=0.3),
-    transforms.ColorJitter(brightness=0.2, contrast=0.2),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-])
-
-test_transform = transforms.Compose([
-    transforms.Resize((IMG_SIZE, IMG_SIZE)),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-])
+def house_image(row, seed):
+    """Toy illustration encodes bedroom count; it is not a photograph."""
+    rng = np.random.default_rng(seed)
+    image = rng.integers(180, 255, (128, 128, 3), dtype=np.uint8)
+    image[40:90, 20:110] = rng.integers([150, 120, 80], [230, 200, 160])
+    yy, xx = np.mgrid[20:45, 15:115]
+    image[20:45, 15:115][np.abs(yy - 42) > np.abs(xx - 65) * 0.3] = rng.integers([80, 40, 30], [140, 80, 60])
+    image[60:88, 55:70] = [101, 67, 33]
+    for i in range(min(int(row.bedrooms), 3)):
+        image[50:65, 25 + i * 30:40 + i * 30] = [135, 206, 235]
+    return Image.fromarray(image)
 
 
 class HousingDataset(Dataset):
-    def __init__(self, tabular, targets, indices, img_dir, transform=None):
-        self.tabular = tabular
-        self.targets = targets
-        self.indices = indices
-        self.img_dir = img_dir
-        self.transform = transform
+    def __init__(self, frame, indices, feature_scaler, target_scaler, training=False, seed=42):
+        self.frame, self.indices, self.seed = frame, np.asarray(indices), seed
+        rows = frame.iloc[self.indices]
+        self.features = feature_scaler.transform(rows.loc[:, FEATURES]).astype(np.float32)
+        self.targets = target_scaler.transform(np.log1p(rows.price.to_numpy())[:, None]).ravel().astype(np.float32)
+        steps = [transforms.RandomHorizontalFlip(0.3), transforms.ColorJitter(brightness=0.2, contrast=0.2)] if training else []
+        self.transform = transforms.Compose(steps + [transforms.ToTensor(), transforms.Normalize(
+            [0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
 
     def __len__(self):
         return len(self.indices)
 
-    def __getitem__(self, idx):
-        real_idx = self.indices[idx]
-        img = Image.open(os.path.join(self.img_dir, f"house_{real_idx}.png")).convert("RGB")
-        if self.transform:
-            img = self.transform(img)
-        tab = torch.tensor(self.tabular[idx], dtype=torch.float32)
-        target = torch.tensor(self.targets[idx], dtype=torch.float32)
-        return img, tab, target
-
-
-train_ds = HousingDataset(X_tab_train, y_train, idx_train, img_dir, train_transform)
-test_ds = HousingDataset(X_tab_test, y_test, idx_test, img_dir, test_transform)
-train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
-test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False)
-
-print(f"  Train: {len(train_ds)}, Test: {len(test_ds)}")
-
-print("\n[4/6] Building multimodal model (CNN + Tabular)...")
+    def __getitem__(self, index):
+        row_id = int(self.indices[index])
+        image = house_image(self.frame.iloc[row_id], self.seed + row_id)
+        return self.transform(image), torch.from_numpy(self.features[index]), torch.tensor(self.targets[index])
 
 
 class MultimodalHousingModel(nn.Module):
-    def __init__(self, tabular_dim=6, hidden_dim=128):
+    def __init__(self, pretrained=True):
         super().__init__()
-        self.cnn = models.resnet18(pretrained=True)
-        for param in list(self.cnn.parameters())[:-20]:
-            param.requires_grad = False
+        self.cnn = models.resnet18(weights=models.ResNet18_Weights.DEFAULT if pretrained else None)
         self.cnn.fc = nn.Identity()
-        cnn_out = 512
+        if pretrained:
+            for parameter in self.cnn.parameters():
+                parameter.requires_grad = False
+        self.frozen_encoder = pretrained
+        # LayerNorm permits a final minibatch containing a single example.
+        self.tabular_net = nn.Sequential(nn.Linear(6, 64), nn.ReLU(), nn.LayerNorm(64),
+                                         nn.Dropout(0.3), nn.Linear(64, 32), nn.ReLU())
+        self.fusion = nn.Sequential(nn.Linear(544, 128), nn.ReLU(), nn.LayerNorm(128),
+                                    nn.Dropout(0.3), nn.Linear(128, 64), nn.ReLU(), nn.Linear(64, 1))
 
-        self.tabular_net = nn.Sequential(
-            nn.Linear(tabular_dim, 64),
-            nn.ReLU(),
-            nn.BatchNorm1d(64),
-            nn.Dropout(0.3),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-        )
+    def train(self, mode=True):
+        super().train(mode)
+        if self.frozen_encoder:
+            self.cnn.eval()  # Frozen BatchNorm statistics must stay frozen too.
+        return self
 
-        self.fusion = nn.Sequential(
-            nn.Linear(cnn_out + 32, hidden_dim),
-            nn.ReLU(),
-            nn.BatchNorm1d(hidden_dim),
-            nn.Dropout(0.4),
-            nn.Linear(hidden_dim, 64),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(64, 1),
-        )
-
-    def forward(self, img, tab):
-        img_feat = self.cnn(img)
-        tab_feat = self.tabular_net(tab)
-        combined = torch.cat([img_feat, tab_feat], dim=1)
-        return self.fusion(combined).squeeze(-1)
+    def forward(self, image, tabular):
+        return self.fusion(torch.cat([self.cnn(image), self.tabular_net(tabular)], 1)).squeeze(-1)
 
 
-model = MultimodalHousingModel().to(DEVICE)
-total_params = sum(p.numel() for p in model.parameters())
-trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-print(f"  Total params: {total_params:,}")
-print(f"  Trainable params: {trainable_params:,}")
-print(f"  Device: {DEVICE}")
-
-criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=LR, weight_decay=1e-5)
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, factor=0.5)
-
-print("\n[5/6] Training...")
-train_losses = []
-test_losses = []
-
-for epoch in range(EPOCHS):
-    model.train()
-    running_loss = 0.0
-    for img, tab, target in train_loader:
-        img, tab, target = img.to(DEVICE), tab.to(DEVICE), target.to(DEVICE)
-        optimizer.zero_grad()
-        pred = model(img, tab)
-        loss = criterion(pred, target)
-        loss.backward()
-        optimizer.step()
-        running_loss += loss.item() * img.size(0)
-    train_loss = running_loss / len(train_ds)
-    train_losses.append(train_loss)
-
+def validation_loss(model, loader, device):
     model.eval()
-    test_loss = 0.0
-    all_preds, all_targets = [], []
+    total, count = 0., 0
     with torch.no_grad():
-        for img, tab, target in test_loader:
-            img, tab, target = img.to(DEVICE), tab.to(DEVICE), target.to(DEVICE)
-            pred = model(img, tab)
-            test_loss += criterion(pred, target).item() * img.size(0)
-            all_preds.extend(pred.cpu().numpy())
-            all_targets.extend(target.cpu().numpy())
-    test_loss /= len(test_ds)
-    test_losses.append(test_loss)
-    scheduler.step(test_loss)
+        for images, features, targets in loader:
+            prediction = model(images.to(device), features.to(device))
+            total += nn.functional.mse_loss(prediction, targets.to(device), reduction='sum').item()
+            count += len(targets)
+    if not count:
+        raise ValueError('Validation split is empty.')
+    return total / count
 
-    preds_original = np.expm1(all_preds)
-    targets_original = np.expm1(all_targets)
-    mae = mean_absolute_error(targets_original, preds_original)
-    rmse = np.sqrt(mean_squared_error(targets_original, preds_original))
 
-    print(f"  Epoch {epoch+1}/{EPOCHS} | Train Loss: {train_loss:.4f} | Test Loss: {test_loss:.4f} | MAE: ${mae:,.0f} | RMSE: ${rmse:,.0f}")
+def fit_model(model, train_loader, val_loader, device, epochs=15, learning_rate=1e-4):
+    """No test loader is accepted; scheduling and selection use validation only."""
+    optimizer = torch.optim.Adam((p for p in model.parameters() if p.requires_grad), lr=learning_rate, weight_decay=1e-5)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, factor=0.5)
+    best_loss, best_state, best_epoch = float('inf'), None, None
+    history = []
+    for epoch in range(1, epochs + 1):
+        model.train()
+        total = 0.
+        for images, features, targets in train_loader:
+            optimizer.zero_grad(set_to_none=True)
+            loss = nn.functional.mse_loss(model(images.to(device), features.to(device)), targets.to(device))
+            loss.backward()
+            optimizer.step()
+            total += loss.item() * len(targets)
+        val_loss = validation_loss(model, val_loader, device)
+        scheduler.step(val_loss)
+        if val_loss < best_loss:
+            best_loss, best_epoch = val_loss, epoch
+            best_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
+        history.append({'epoch': epoch, 'train_mse': total / len(train_loader.dataset), 'validation_mse': val_loss})
+        print(f'Epoch {epoch}/{epochs}: train={history[-1]["train_mse"]:.4f}; validation={val_loss:.4f}', flush=True)
+    if best_state is None:
+        raise ValueError('No finite validation checkpoint was produced.')
+    model.load_state_dict(best_state)
+    return best_epoch, history
 
-print("\n[6/6] Final evaluation...")
-model.eval()
-all_preds, all_targets = [], []
-with torch.no_grad():
-    for img, tab, target in test_loader:
-        img, tab, target = img.to(DEVICE), tab.to(DEVICE), target.to(DEVICE)
-        pred = model(img, tab)
-        all_preds.extend(pred.cpu().numpy())
-        all_targets.extend(target.cpu().numpy())
 
-preds_original = np.expm1(all_preds)
-targets_original = np.expm1(all_targets)
-final_mae = mean_absolute_error(targets_original, preds_original)
-final_rmse = np.sqrt(mean_squared_error(targets_original, preds_original))
-ss_res = np.sum((targets_original - preds_original) ** 2)
-ss_tot = np.sum((targets_original - np.mean(targets_original)) ** 2)
-r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0
+def regression_metrics(targets, predictions):
+    if not np.isfinite(predictions).all():
+        raise ValueError('Nonfinite predictions; inspect target scaling and training.')
+    return {'mae': float(mean_absolute_error(targets, predictions)),
+            'rmse': float(np.sqrt(mean_squared_error(targets, predictions))),
+            'r2': float(r2_score(targets, predictions))}
 
-print(f"\n  Final MAE:  ${final_mae:,.0f}")
-print(f"  Final RMSE: ${final_rmse:,.0f}")
-print(f"  R² Score:   {r2:.4f}")
 
-plt.figure(figsize=(12, 5))
-plt.subplot(1, 2, 1)
-plt.plot(train_losses, label="Train Loss")
-plt.plot(test_losses, label="Test Loss")
-plt.xlabel("Epoch")
-plt.ylabel("MSE Loss")
-plt.title("Training Curves")
-plt.legend()
-plt.grid(True, alpha=0.3)
+def tabular_baselines(frame, splits, feature_scaler):
+    train, test = splits['train'], splits['test']
+    x_train = feature_scaler.transform(frame.iloc[train].loc[:, FEATURES])
+    x_test = feature_scaler.transform(frame.iloc[test].loc[:, FEATURES])
+    y_train, y_test = frame.iloc[train].price, frame.iloc[test].price
+    return {name: regression_metrics(y_test, estimator.fit(x_train, y_train).predict(x_test))
+            for name, estimator in [('mean', DummyRegressor(strategy='mean')), ('tabular_ridge', Ridge(alpha=1.0))]}
 
-plt.subplot(1, 2, 2)
-plt.scatter(targets_original, preds_original, alpha=0.3, s=10)
-min_val = min(targets_original.min(), preds_original.min())
-max_val = max(targets_original.max(), preds_original.max())
-plt.plot([min_val, max_val], [min_val, max_val], "r--", linewidth=2)
-plt.xlabel("Actual Price ($)")
-plt.ylabel("Predicted Price ($)")
-plt.title(f"Actual vs Predicted (R²={r2:.4f})")
-plt.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.savefig(os.path.join(MODEL_DIR, "results.png"), dpi=150)
 
-torch.save({
-    "model_state_dict": model.state_dict(),
-    "scaler": scaler,
-    "metrics": {"mae": float(final_mae), "rmse": float(final_rmse), "r2": float(r2)},
-}, os.path.join(MODEL_DIR, "multimodal_model.pt"))
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--samples', type=int, default=2000)
+    parser.add_argument('--epochs', type=int, default=15)
+    parser.add_argument('--batch-size', type=int, default=16)
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--learning-rate', type=float, default=1e-4)
+    parser.add_argument('--no-pretrained', action='store_true', help='Random encoder weights, without downloads; for offline software checks.')
+    parser.add_argument('--device', choices=['auto', 'cpu', 'cuda'], default='auto')
+    parser.add_argument('--output-dir', type=Path, default=Path('runs/housing_multimodal'))
+    args = parser.parse_args(argv)
+    if args.samples < 20 or args.epochs < 1 or args.batch_size < 1 or args.learning_rate <= 0:
+        parser.error('samples >= 20, epochs/batch-size >= 1 and learning-rate > 0 are required.')
+    if args.device == 'cuda' and not torch.cuda.is_available():
+        parser.error('CUDA was requested but is unavailable.')
+    device = torch.device(('cuda' if torch.cuda.is_available() else 'cpu') if args.device == 'auto' else args.device)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    frame = generate_data(args.samples, args.seed)
+    splits = split_indices(len(frame), args.seed)
+    feature_scaler, target_scaler = fit_preprocessors(frame, splits['train'])
+    datasets = {name: HousingDataset(frame, ids, feature_scaler, target_scaler, training=name == 'train', seed=args.seed)
+                for name, ids in splits.items()}
+    loaders = {name: DataLoader(data, batch_size=args.batch_size, shuffle=name == 'train') for name, data in datasets.items()}
+    model = MultimodalHousingModel(pretrained=not args.no_pretrained).to(device)
+    best_epoch, history = fit_model(model, loaders['train'], loaders['validation'], device, args.epochs, args.learning_rate)
+    model.eval()
+    predicted = []
+    # First test pass occurs after all model selection has finished.
+    with torch.no_grad():
+        for images, features, _ in loaders['test']:
+            predicted.extend(model(images.to(device), features.to(device)).cpu().tolist())
+    log_prices = target_scaler.inverse_transform(np.asarray(predicted)[:, None]).ravel()
+    metrics = {'schema_version': 2, 'dataset': 'synthetic_housing_illustrations',
+               'protocol': 'train_validation_test_70_15_15',
+               'samples': len(frame), 'split_sizes': {key: len(ids) for key, ids in splits.items()},
+               'seed': args.seed, 'device': str(device), 'pretrained_encoder': not args.no_pretrained,
+               'training_config': {'epochs': args.epochs, 'batch_size': args.batch_size,
+                                   'learning_rate': args.learning_rate},
+               'source_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+               'best_epoch': best_epoch,
+               'multimodal': regression_metrics(frame.iloc[splits['test']].price, np.expm1(log_prices)),
+               'baselines': tabular_baselines(frame, splits, feature_scaler), 'history': history}
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    (args.output_dir / 'metrics.json').write_text(json.dumps(metrics, indent=2, allow_nan=False) + '\n')
+    (args.output_dir / 'splits.json').write_text(json.dumps({key: ids.tolist() for key, ids in splits.items()}, indent=2) + '\n')
+    torch.save({'model_state_dict': model.cpu().state_dict(), 'feature_names': list(FEATURES),
+                'feature_mean': feature_scaler.mean_.tolist(), 'feature_scale': feature_scaler.scale_.tolist(),
+                'target_log_mean': float(target_scaler.mean_[0]), 'target_log_scale': float(target_scaler.scale_[0]),
+                'metrics': metrics, 'seed': args.seed}, args.output_dir / 'model.pt')
+    print(json.dumps({key: value for key, value in metrics.items() if key != 'history'}, indent=2))
+    return metrics
 
-with open(os.path.join(MODEL_DIR, "metrics.json"), "w") as f:
-    json.dump({"mae": float(final_mae), "rmse": float(final_rmse), "r2": float(r2)}, f, indent=2)
 
-print(f"\n  Model saved to {MODEL_DIR}")
-print("=" * 60)
-print("Task 3 COMPLETE")
-print("=" * 60)
+if __name__ == '__main__':
+    main()
